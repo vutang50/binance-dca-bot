@@ -106,7 +106,14 @@ docker build -t binance-dca-bot .
 then you can execute it with:
 
 ```
-docker run -v $PWD/trades.js:/app/trades.js binance-dca-bot
+docker run -v $PWD/trades.js:/app/trades.js --env-file $PWD/.env binance-dca-bot
+```
+
+**or** with docker-compose:
+
+```
+docker-compose build
+docker-compose up -d
 ```
 
 ## Deployment

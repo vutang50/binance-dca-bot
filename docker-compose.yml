@@ -1,0 +1,8 @@
+version: "3.6"
+services:
+  binance-dca-bot:
+    container_name: binance-dca-bot
+    build:
+      context: .
+    volumes:
+      - ./trades.js:/app/trades.js
