@@ -33,7 +33,8 @@ const TRADES = JSON.parse(process.env.TRADES || null) || trades || [];
 const BINANCE_SECRET = process.env.BINANCE_SECRET || null;
 const BINANCE_KEY = process.env.BINANCE_KEY || null;
 const BINANCE_TESTNET = process.env.BINANCE_TESTNET === "true" ? true : false;
-const binance = new BinanceAPI(BINANCE_TESTNET, BINANCE_KEY, BINANCE_SECRET);
+const BINANCE_USNET = process.env.BINANCE_USNET === "true" ? true : false;
+const binance = new BinanceAPI(BINANCE_TESTNET, BINANCE_USNET, BINANCE_KEY, BINANCE_SECRET);
 
 /**
  * Telegram Integration

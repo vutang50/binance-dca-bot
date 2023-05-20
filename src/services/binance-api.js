@@ -5,15 +5,18 @@ import querystring from "querystring";
 export class BinanceAPI {
 	/**
 	 * @param {boolean} testnet
+	 * @param {boolean} usnet
 	 * @param {string} key
 	 * @param {string} secret
 	 */
-	constructor(testnet, key, secret) {
+	constructor(testnet, usnet, key, secret) {
 		this.key = key;
 		this.secret = secret;
 		this.testnet = testnet;
+		this.usnet = usnet;
 
-		this.apiUrl = this.testnet ? "https://testnet.binance.vision" : "https://api.binance.com";
+		this.apiUrl = this.usnet ? "https://api.binance.us" : "https://api.binance.com";
+		this.apiUrl = this.testnet ? "https://testnet.binance.vision" : this.apiUrl;
 
 		if (!this.key) throw new Error("No Binance API Key found in .env");
 		if (!this.secret) throw new Error("No Binance API Secret found in .env");
