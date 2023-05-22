@@ -63,6 +63,32 @@ export class BinanceAPI {
 	}
 
 	/**
+	 * Get current book ticker
+	 * @returns {object} book ticker
+	 */
+	async getBookTicker(symbol) {
+		let params = {
+			symbol: symbol,
+		}
+
+
+		const url = `${this.apiUrl}/api/v3/ticker/bookTicker?${querystring.stringify(params)}`;
+
+		try {
+			const response = await fetch(url, {
+				method: "GET",
+				headers: {
+					"Content-Type": "application/json"
+				}
+			});
+
+			return await response.json();
+		} catch (error) {
+			console.error(error);
+		}
+	}
+
+	/**
 	 * Create a market buy order
 	 * @param {string} symbol
 	 * @param {string} quantity

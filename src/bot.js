@@ -8,6 +8,7 @@ import { BinanceAPI } from "./services/binance-api.js";
 import { SendGridNotification } from "./services/sendgrid-notification.js";
 import { TelegramAPI } from "./services/telegram-api.js"
 import { MongoDb } from "./services/mongodb.js";
+import { TAAPI } from "./services/ta-api.js";
 
 /**
  * Load .env file
@@ -25,6 +26,11 @@ const requestListener = function (req, res) {
 }
 const server = http.createServer(requestListener);
 server.listen(PORT);
+
+/**
+ * DEBUG
+ */
+const DEBUG = process.env.DEBUG === "true" ? true : false;
 
 /**
  * Number of approximate trades available before warning message
@@ -63,13 +69,28 @@ const MONGODB_URI = process.env.MONGODB_URI || null;
 const mongoDb = new MongoDb(MONGODB_URI);
 
 /**
+ * TAAPI Integration
+ */
+const TAAPI_KEY = process.env.TAAPI_KEY || null;
+const ta = new TAAPI(TAAPI_KEY);
+
+/**
  * Actually place the order
  * @param {object} trade
  */
 async function placeOrder(trade) {
-	const { asset, currency, quantity, quoteOrderQty } = trade;
+	const { asset, currency, quantity, quoteOrderQty, weight } = trade;
 	const pair = asset + currency;
-	const response = await binance.marketBuy(pair, quantity, quoteOrderQty);
+	
+	// Calculate weight if configured for it, and only USD is supported
+	let updatedQuoteOrderQty = (weight != null && currency === "USD") ? await calculateWeight(trade) : quoteOrderQty
+
+	if ( updatedQuoteOrderQty == 0 ){
+		await telegram.sendMessage(`⚠️ *Weighting algorithm skipped purchase (${pair})*\n\n`);
+		return;
+	}
+
+	const response = await binance.marketBuy(pair, quantity, updatedQuoteOrderQty);
 
 	if (response.orderId) {
 		const successText = `Successfully purchased: ${response.executedQty} ${asset} @ ${response.fills[0].price} ${currency}. Spent: ${response.cummulativeQuoteQty} ${currency}.\n`;
@@ -113,6 +134,50 @@ async function placeOrder(trade) {
 			'```');
 	}
 }
+
+/**
+ * Calculate an updated quoteOrderQty based on the weight factors
+ */
+async function calculateWeight(trade) {
+	const { asset, currency, quoteOrderQty, weight } = trade;
+	const pair = asset+currency;
+
+	// Get the 200 day SMA and calculate mayer multiple
+	const sma = await ta.getSMA(asset, currency, "1d", 200);
+	const bookTicker = await binance.getBookTicker(pair);
+	let currentPrice = bookTicker.bidPrice;
+	const mayerMultiple = currentPrice / sma
+
+	// Calculate distance from ATH and calculate weight factor
+	let athFactor = weight.maxATHFactor - ( currentPrice / weight.ATH );
+	athFactor *= athFactor;
+	
+	// Calculate Mayer Factor based on distance from the max
+	const mayerWeightConstant = 1 / (1 - (weight.mayerMultipleAvg / weight.mayerMultipleMax));
+	const currentWeightMultiple = 1 - mayerMultiple / weight.mayerMultipleMax;
+
+	// Must be a positive number or 0.  If it's negative we set to 0
+	let mayerFactor = mayerWeightConstant * currentWeightMultiple;
+	mayerFactor = (mayerFactor > 0) ? mayerFactor : 0;
+	
+	let updatedQuoteOrderQty = quoteOrderQty * mayerFactor * athFactor;
+	updatedQuoteOrderQty = updatedQuoteOrderQty.toFixed(2);
+
+	if (DEBUG) {
+		console.log("sma: "+ sma);
+		console.log("currentPrice: "+currentPrice);
+		console.log("mayerMultiple: "+mayerMultiple);
+		console.log("athFactor: "+athFactor);
+		console.log("mayerWeightConstant: "+mayerWeightConstant);
+		console.log("currentWeightMultiple: "+currentWeightMultiple);
+		console.log("mayerFactor: "+mayerFactor);
+		console.log("updatedQuoteOrderQty: "+updatedQuoteOrderQty);
+	}
+	
+	return updatedQuoteOrderQty;
+	
+}
+
 
 /**
  * Get human-readable details on the trades to perform
@@ -199,6 +264,7 @@ async function runBot() {
 		} else {
 			cron.scheduleJob(schedule, async () => await placeOrder(trade));
 		}
+
 	}
 	await telegram.sendMessage('🏁 *Binance DCA Bot Started*\n\n' +
 		`_Date:_ ${new Date().toLocaleString()}\n\n` +
