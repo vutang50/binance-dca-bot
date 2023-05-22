@@ -27,6 +27,11 @@ const server = http.createServer(requestListener);
 server.listen(PORT);
 
 /**
+ * Number of approximate trades available before warning message
+ */
+const NUM_TRADE_THRESHOLD = 5
+
+/**
  * Binance Integration
  */
 const TRADES = JSON.parse(process.env.TRADES || null) || trades || [];
@@ -84,7 +89,19 @@ async function placeOrder(trade) {
 			`_Total:_ ${details.totalCost} ${details.currency}\n` +
 			`_Average Value:_ ${details.averageAssetValue} ${details.currency}/${details.asset}\n` +
 			`_Fees:_ ${details.commissions} ${details.commissionAsset}\n\n` +
-			`${details.fills.join('\n')}`);
+			`${details.fills.join('\n')}\n`);
+		
+		const accountInfo = await binance.getAccountInfo();
+
+		const balance = accountInfo.balances.find(item => {
+			return item.asset == currency
+		})
+		
+		if ( details.totalCost*NUM_TRADE_THRESHOLD > balance.free ){
+			await telegram.sendMessage(`⚠️ *Balance low (${currency})*\n\n` +
+				`_Balance Free:_ ${balance.free} ${currency}`);
+		}
+
 	} else {
 		const errorText = response.msg || `Unexpected error placing buy order for ${pair}`;
 		console.error(colors.red(errorText));
